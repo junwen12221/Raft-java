@@ -62,9 +62,12 @@ public class Process {
     }
 
     public void becomeProbe() {
+        // If the original state is ProgressStateSnapshot, progress knows that
+        // the pending snapshot has been sent to this peer successfully, then
+        // probes from pendingSnapshot + 1.
         if (this.state == ProgressStateType.ProgressStateSnapshot) {
             long pendingSnapshot = this.pendingSnapshot;
-            this.resetState(ProgressStateType.ProgressStateSnapshot);
+            this.resetState(ProgressStateType.ProgressStateProbe);
             this.next = Math.max(this.match + 1, pendingSnapshot + 1);
         } else {
             this.resetState(ProgressStateType.ProgressStateProbe);

@@ -46,7 +46,7 @@ public class RaftSnapTest {
     @Test
     public void testSendingSnapshotSetPendingSnapshot()throws Exception{
         MemoryStorage storage = MemoryStorage.newMemoryStorage();
-        Raft sm = RaftTest.newTestRaft(1, Arrays.asList(1L), 10, 1, storage);
+        Raft sm = RaftTestUtil.newTestRaft(1, Arrays.asList(1L), 10, 1, storage);
         sm.restore(testingSnap);
 
         sm.becomeCandidate();
@@ -66,7 +66,7 @@ public class RaftSnapTest {
     @Test
     public void testPendingSnapshotPauseReplication()throws Exception{
         MemoryStorage storage = MemoryStorage.newMemoryStorage();
-        Raft sm = RaftTest.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
+        Raft sm = RaftTestUtil.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
         sm.restore(testingSnap);
 
         sm.becomeCandidate();
@@ -78,7 +78,7 @@ public class RaftSnapTest {
                 .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                 .build());
 
-        List<Raftpb.Message> msgs = RaftTest.readMessages(sm);
+        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(sm);
         if ( Util.len(msgs) != 0){
             Assert.fail();
         }
@@ -87,7 +87,7 @@ public class RaftSnapTest {
     @Test
     public void testSnapshotFailure()throws Exception{
         MemoryStorage storage = MemoryStorage.newMemoryStorage();
-        Raft sm = RaftTest.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
+        Raft sm = RaftTestUtil.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
         sm.restore(testingSnap);
 
         sm.becomeCandidate();
@@ -115,7 +115,7 @@ public class RaftSnapTest {
     @Test
     public void testSnapshotSucceed()throws Exception {
         MemoryStorage storage = MemoryStorage.newMemoryStorage();
-        Raft sm = RaftTest.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
+        Raft sm = RaftTestUtil.newTestRaft(1, Arrays.asList(1L,2L), 10, 1, storage);
         sm.restore(testingSnap);
 
         sm.becomeCandidate();
@@ -142,7 +142,7 @@ public class RaftSnapTest {
     @Test
     public void testSnapshotAbort()throws Exception {
         MemoryStorage storage = MemoryStorage.newMemoryStorage();
-        Raft sm = RaftTest.newTestRaft(1,Arrays.asList(1L,2L), 10, 1, storage);
+        Raft sm = RaftTestUtil.newTestRaft(1,Arrays.asList(1L,2L), 10, 1, storage);
         sm.restore(testingSnap);
 
         sm.becomeCandidate();

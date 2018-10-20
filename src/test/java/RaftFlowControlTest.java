@@ -46,7 +46,7 @@ public class RaftFlowControlTest {
      */
     @Test
     public void testMsgAppFlowControlFull() throws Exception {
-        Raft r = RaftTest.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
+        Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
         r.becomeCandidate();
         r.becomeLeader();
 
@@ -62,7 +62,7 @@ public class RaftFlowControlTest {
                     .type(Raftpb.MessageType.MsgProp)
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
-            List<Raftpb.Message> ms = RaftTest.readMessages(r);
+            List<Raftpb.Message> ms = RaftTestUtil.readMessages(r);
             if (ms.size() != 1) {
                 Assert.fail(String.format("#%d: len(ms) = %d, want 1", i, ms.size()));
             }
@@ -81,7 +81,7 @@ public class RaftFlowControlTest {
                     .type(Raftpb.MessageType.MsgProp)
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
-            List<Raftpb.Message> ms = RaftTest.readMessages(r);
+            List<Raftpb.Message> ms = RaftTestUtil.readMessages(r);
             if (ms.size() != 0) {
                 Assert.fail(String.format("#%d: len(ms) = %d, want 0", i, ms.size()));
             }
@@ -98,7 +98,7 @@ public class RaftFlowControlTest {
      */
     @Test
     public void testMsgAppFlowControlMoveForward() throws Exception {
-        Raft raft = RaftTest.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
+        Raft raft = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
         raft.becomeCandidate();
         raft.becomeLeader();
 
@@ -112,7 +112,7 @@ public class RaftFlowControlTest {
                     .type(Raftpb.MessageType.MsgProp)
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
-            RaftTest.readMessages(raft);
+            RaftTestUtil.readMessages(raft);
         }
         // 1 is noop, 2 is the first proposal we just sent.
         // so we start with 2.
@@ -126,7 +126,7 @@ public class RaftFlowControlTest {
                             .index(i)
                             .build()
             );
-            RaftTest.readMessages(raft);
+            RaftTestUtil.readMessages(raft);
 
             // fill in the inflights window again
             raft.step(Raftpb.Message.builder()
@@ -136,7 +136,7 @@ public class RaftFlowControlTest {
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
 
-            List<Raftpb.Message> ms = RaftTest.readMessages(raft);
+            List<Raftpb.Message> ms = RaftTestUtil.readMessages(raft);
             if (Util.len(ms) != 1) {
                 Assert.fail();
             }
@@ -171,7 +171,7 @@ public class RaftFlowControlTest {
      */
     @Test
     public void testMsgAppFlowControlRecvHeartbeat() throws Exception {
-        Raft raft = RaftTest.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
+        Raft raft = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L), 5, 1, MemoryStorage.newMemoryStorage());
         raft.becomeCandidate();
         raft.becomeLeader();
 
@@ -185,7 +185,7 @@ public class RaftFlowControlTest {
                     .type(Raftpb.MessageType.MsgProp)
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
-            RaftTest.readMessages(raft);
+            RaftTestUtil.readMessages(raft);
         }
 
         for (int tt = 1; tt < 5; tt++) {
@@ -198,7 +198,7 @@ public class RaftFlowControlTest {
                 raft.step(Raftpb.Message.builder().from(2).to(1)
                         .type(Raftpb.MessageType.MsgHeartbeatResp)
                         .build());
-                RaftTest.readMessages(raft);
+                RaftTestUtil.readMessages(raft);
                 if (pr2.getIns().full()){
                     Assert.fail(String.format("#%d.%d: inflights.full = %s, want %b", tt, i, pr2.ins.full(), false));
                 }
@@ -208,7 +208,7 @@ public class RaftFlowControlTest {
                     .type(Raftpb.MessageType.MsgProp)
                     .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                     .build());
-            List<Raftpb.Message> ms = RaftTest.readMessages(raft);
+            List<Raftpb.Message> ms = RaftTestUtil.readMessages(raft);
             if (Util.len(ms)!=1){
                 Assert.fail(String.format("#%d: free slot = 0, want 1", tt));
             }
@@ -217,7 +217,7 @@ public class RaftFlowControlTest {
                         .from(1).to(1).type(Raftpb.MessageType.MsgProp)
                         .entries(Arrays.asList(Raftpb.Entry.builder().data("somedata".getBytes()).build()))
                         .build());
-                List<Raftpb.Message> ms1 = RaftTest.readMessages(raft);
+                List<Raftpb.Message> ms1 = RaftTestUtil.readMessages(raft);
                 if (Util.len(ms1)!=0){
                     Assert.fail(String.format("#%d.%d: len(ms) = %d, want 0", tt, i, Util.len(ms1)));
                 }
@@ -227,7 +227,7 @@ public class RaftFlowControlTest {
             raft.step(Raftpb.Message.builder()
                     .from(2).to(1).type(Raftpb.MessageType.MsgHeartbeatResp)
                     .build());
-            RaftTest.readMessages(raft);
+            RaftTestUtil.readMessages(raft);
         }
 
 
