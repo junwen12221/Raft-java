@@ -116,6 +116,7 @@ public class RaftFlowControlTest {
             if (!pr2.getIns().full()){
                 Assert.fail();
             }
+
             for (int j = 0; j < i; j++) {
                 Raftpb.Message build = Raftpb.Message.builder()
                         .from(2)

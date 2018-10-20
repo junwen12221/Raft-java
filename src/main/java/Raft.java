@@ -422,6 +422,7 @@ public class Raft {
                     }
                 }
             }
+            break;
             case MsgHeartbeatResp: {
                 pr.setRecentActive(true);
                 pr.resume();
@@ -459,8 +460,8 @@ public class Raft {
                                 .build());
                     }
                 }
-                break;
             }
+            break;
             case MsgSnapStatus: {
                 if (pr.getState() != Process.ProgressStateType.ProgressStateSnapshot) {
                     return;
@@ -477,8 +478,8 @@ public class Raft {
                 // out the next msgApp.
                 // If snapshot failure, wait for a heartbeat interval before next try
                 pr.pause();
-                break;
             }
+            break;
             case MsgUnreachable: {
                 // During optimistic replication, if the remote becomes unreachable,
                 // there is huge probability that a MsgApp is lost.
@@ -486,8 +487,8 @@ public class Raft {
                     pr.becomeProbe();
                 }
                 r.logger.debugf("%x failed to send message to %x because it is unreachable [%s]", r.id, m.getFrom(), pr);
-                break;
             }
+            break;
             case MsgTransferLeader: {
                 if (pr.isLeader()) {
                     r.logger.debugf("%x is learner. Ignored transferring leadership", r.id);
@@ -519,8 +520,8 @@ public class Raft {
                 } else {
                     this.sendAppend(leadTransFeree);
                 }
-                break;
             }
+            break;
         }
         return;
     }
@@ -1409,14 +1410,15 @@ public class Raft {
         if (this.matchBuf == null || this.matchBuf.length < size) {
             this.matchBuf = new long[size];
         }
-        long[] mis = Arrays.copyOf(this.matchBuf, size);
+        int misLength = size;
+        long[] mis =  this.matchBuf;
         int idx = 0;
         for (Process p : this.prs.values()) {
             mis[idx] = p.getMatch();
             idx++;
         }
-        Arrays.sort(mis);
-        long mci = mis[mis.length - this.quorum()];
+        Arrays.sort(mis,0,misLength);
+        long mci = mis[misLength - this.quorum()];
         return this.raftLog.matchCommit(mci, this.getTerm());
     }
 
