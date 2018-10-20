@@ -34,6 +34,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/***
+ * cjw
+ */
 public class RaftSnapTest {
     final static Raftpb.Snapshot testingSnap = Raftpb.Snapshot.builder().metadata(Raftpb.SnapshotMetadata.builder()
             .index(11).term(11).confState(Raftpb.ConfState.builder()

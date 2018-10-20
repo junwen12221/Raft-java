@@ -32,6 +32,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
+/***
+ * cjw
+ */
 public interface RaftLogger {
     void debug(Object... v);
 

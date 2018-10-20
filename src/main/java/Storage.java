@@ -33,6 +33,9 @@ import lombok.Data;
 import java.io.Closeable;
 import java.util.List;
 
+/***
+ * cjw
+ */
 public interface Storage extends Closeable {
     // ErrCompacted is returned by Storage.Entries/Compact when a requested
 // index is unavailable because it predates the last snapshot.

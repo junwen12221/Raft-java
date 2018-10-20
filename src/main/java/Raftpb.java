@@ -32,6 +32,9 @@ import lombok.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/***
+ * cjw
+ */
 public class Raftpb {
     public enum EntryType {
         Normal, ConfChange,

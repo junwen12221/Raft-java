@@ -35,6 +35,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
+/***
+ * cjw
+ */
 @Builder
 @Data
 public class Raft {

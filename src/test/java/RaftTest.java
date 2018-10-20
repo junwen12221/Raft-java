@@ -36,6 +36,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/***
+ * cjw
+ */
 public class RaftTest {
     public static Config newTestConfig(long id, List<Long> peer, int election, int heatbeat, Storage storage) {
         return Config.builder()

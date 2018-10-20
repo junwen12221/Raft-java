@@ -33,6 +33,9 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.List;
 
+/***
+ * cjw
+ */
 public class RaftFlowControlTest {
     @Test
     public void testMsgAppFlowControlFull() throws Exception {
@@ -55,7 +58,7 @@ public class RaftFlowControlTest {
             }
         }
         if (!pr2.getIns().full()){
-            Assert.fail(String.format("inflights.full = %t, want %t", pr2.ins.full(), true));
+            Assert.fail(String.format("inflights.full = %b, want %b", pr2.ins.full(), true));
         }
         for (int i = 0; i < 10; i++) {
             r.step(Raftpb.Message.builder()
