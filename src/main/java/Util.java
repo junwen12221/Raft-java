@@ -36,50 +36,102 @@ import java.util.Objects;
 
 public class Util {
     final static Logger logger = LoggerFactory.getLogger(Util.class);
+
+    /**
+     * @finished
+     * @param stateType
+     * @return
+     */
     public static byte[] marshalJSON(Raft.StateType stateType) {
         return stateType.toString().getBytes();
     }
 
+    /**
+     * @finished
+     * @param list
+     * @param <T>
+     * @return
+     */
     public static <T> int len(List<T> list) {
         if (list == null) return 0;
         return list.size();
     }
 
+    /**
+     * @finished
+     * @param a
+     * @param b
+     * @return
+     */
     public static boolean isHardStateEqual(Raftpb.HardState a, Raftpb.HardState b) {
         return a.getTerm() == b.getTerm() && a.getVote() == b.getVote()
                 && a.getCommit() == b.getCommit();
     }
 
+    /**
+     * @finished
+     * @param st
+     * @return
+     */
     public static boolean isEmpty(Raftpb.HardState st) {
         return isHardStateEqual(st, Node.emptyState);
     }
 
+    /**
+     * @finished
+     * @param sp
+     * @return
+     */
     public static boolean isEmptySnap(Raftpb.Snapshot sp) {
         return sp.getMetadata().getIndex() == 0;
     }
 
+    /**
+     * @finished
+     * @param tmp
+     * @param args
+     */
     public static void panic(String tmp, Object... args) {
         String value = String.format(tmp, args);
         System.out.println(value);
         throw new RuntimeException(value);
     }
 
+    /**
+     * @finished
+     * @param e
+     */
     public static void panic(Exception e) {
         e.printStackTrace();
         throw new RuntimeException(e);
     }
 
+    /**
+     * @finished
+     * @param args
+     */
     public static void panic(Object... args) {
         String value = Arrays.deepToString(args);
         System.out.println(value);
         throw new RuntimeException(value);
     }
 
+    /**
+     * @finished
+     * @param entry
+     * @return
+     */
     public static int sizeOf(Raftpb.Entry entry) {
         int size = entry == null ? 0 : entry.getData() == null ? 0 : entry.getData().length;
         return 20 + size;
     }
 
+    /**
+     * @finished
+     * @param ents
+     * @param maxSize
+     * @return
+     */
     public static List<Raftpb.Entry> limitSize(List<Raftpb.Entry> ents, long maxSize) {
         if (ents == null || ents.isEmpty()) return ents;
         else {
@@ -96,12 +148,24 @@ public class Util {
         }
     }
 
+    /**
+     * @finished
+     * @param first
+     * @param second
+     * @param <T>
+     * @return
+     */
     public static <T> T[] append(T[] first, T[] second) {
         T[] result = Arrays.copyOf(first, first.length + second.length);
         System.arraycopy(second, 0, result, first.length, second.length);
         return result;
     }
 
+    /**
+     * @finished
+     * @param msgt
+     * @return
+     */
     public static boolean isLocalMsg(Raftpb.MessageType msgt) {
         switch (msgt) {
             case MsgHup:
@@ -115,6 +179,11 @@ public class Util {
         }
     }
 
+    /**
+     * @finished
+     * @param msgt
+     * @return
+     */
     public static Raftpb.MessageType voteRespMsgType(Raftpb.MessageType msgt) {
         switch (msgt) {
             case MsgVote:
@@ -126,6 +195,12 @@ public class Util {
         }
         return null;
     }
+
+    /**
+     * @finished
+     * @param msgt
+     * @return
+     */
     public static boolean IsResponseMsg(Raftpb.MessageType msgt) {
         switch (msgt) {
             case MsgAppResp:
@@ -144,12 +219,28 @@ public class Util {
        return false;
     }
 
+    /**
+     * @finished
+     */
     interface EntryFormatter{
         String apply(byte[] s);
     }
+
+    /**
+     * @finished
+     * @param format
+     * @param objects
+     */
     public static void fprintf(String format,Object... objects){
         System.out.format(format+"\n",objects);
     }
+
+    /**
+     * @finished
+     * @param m
+     * @param formatter
+     * @return
+     */
     public static String DescribeMessage(Raftpb.Message m, EntryFormatter formatter) {
         StringBuilder buffer = new StringBuilder();
         buffer.append(String.format("%x->%x %s Term:%d Log:%d/%d", m.getFrom(),
@@ -169,6 +260,13 @@ public class Util {
         }
         return buffer.toString();
     }
+
+    /**
+     * @finished
+     * @param e
+     * @param f
+     * @return
+     */
     public static String describeEntry(Raftpb.Entry e,EntryFormatter f) {
         String formatted;
         try {

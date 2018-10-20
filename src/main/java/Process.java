@@ -30,9 +30,6 @@
 import lombok.Builder;
 import lombok.Data;
 
-import java.nio.Buffer;
-import java.util.ArrayList;
-
 /***
  * cjw
  */
@@ -40,7 +37,7 @@ import java.util.ArrayList;
 @Builder
 public class Process {
     long match, next;
-    ProgressStateType state = ProgressStateType.ProgressStateProbe;
+    private ProgressStateType state = ProgressStateType.ProgressStateProbe;
 
     boolean paused;
     boolean recentActive;
@@ -74,46 +71,50 @@ public class Process {
             this.next = this.match + 1;
         }
     }
+
     public void becomeReplicate() {
         this.resetState(ProgressStateType.ProgressStateReplicate);
-        this.next = this.match +1;
+        this.next = this.match + 1;
     }
-    public void becomeSnapshot(long snapshoti){
+
+    public void becomeSnapshot(long snapshoti) {
         this.resetState(ProgressStateType.ProgressStateSnapshot);
         this.pendingSnapshot = snapshoti;
     }
-    public boolean maybeUpdate(long n){
+
+    public boolean maybeUpdate(long n) {
         boolean updated = false;
-        if (this.match <n){
+        if (this.match < n) {
             this.match = n;
             updated = true;
             this.resume();
         }
-        if (this.next < n+1){
-            this.next = n+1;
+        if (this.next < n + 1) {
+            this.next = n + 1;
         }
         return updated;
     }
 
-    public boolean maybeDecrTo(long rejected,long last){
-        if (this.state == ProgressStateType.ProgressStateReplicate){
-            if (rejected <= this.match){
+    public boolean maybeDecrTo(long rejected, long last) {
+        if (this.state == ProgressStateType.ProgressStateReplicate) {
+            if (rejected <= this.match) {
                 return false;
             }
-            this.next = this.match +1;
+            this.next = this.match + 1;
             return true;
         }
-        if (this.next-1 != rejected){
+        if (this.next - 1 != rejected) {
             return false;
         }
-        if ((this.next = Math.min(rejected,last+1))<1){
+        if ((this.next = Math.min(rejected, last + 1)) < 1) {
             this.next = 1;
         }
         this.resume();
         return true;
     }
-    public void optimisticUpdate(long n){
-        this.next = n+1;
+
+    public void optimisticUpdate(long n) {
+        this.next = n + 1;
     }
 
     public void pause() {
@@ -124,10 +125,11 @@ public class Process {
         this.paused = false;
     }
 
-    public void snapshotFailure(){
+    public void snapshotFailure() {
         this.pendingSnapshot = 0L;
     }
-    public boolean needSnapshotAbort(){
+
+    public boolean needSnapshotAbort() {
         return this.state == ProgressStateType.ProgressStateSnapshot
                 &&
                 this.match >= this.pendingSnapshot;

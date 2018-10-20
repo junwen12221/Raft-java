@@ -41,6 +41,10 @@ public class ReadOnly {
     Map<String,ReadIndexStatus> pendingReadIndex;
     ArrayList<String> readIndexQueue = new  ArrayList<>();
 
+    public static ReadOnly newReadOnly(ReadOnlyOption readOnlyOption){
+        return new ReadOnly(readOnlyOption);
+    }
+
     public ReadOnly(ReadOnlyOption option) {
         this.option = option;
         this.pendingReadIndex = new HashMap<>();

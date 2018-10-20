@@ -39,6 +39,8 @@ import java.util.List;
 
 /**
  * cjw
+ *
+ * @finished
  */
 public class UtilTest {
     Util.EntryFormatter testFormmatter = (s) -> new String(s).toUpperCase();

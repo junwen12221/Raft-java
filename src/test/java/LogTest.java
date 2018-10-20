@@ -317,7 +317,7 @@ public class LogTest {
             raftLog.append(entries(entry(i + 1, i + 1)));
         }
         boolean ok = raftLog.matchCommit(lastIndex, lastTerm);
-        if (ok) {
+        if (!ok) {
             Assert.fail();
         }
         raftLog.appliesTo(raftLog.committed);

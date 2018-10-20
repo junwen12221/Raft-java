@@ -151,6 +151,8 @@ public interface RaftLogger {
         public void output(int calldepth,String message){
             StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
             logger.debug("{} {}",Arrays.deepToString(stackTrace),message);
+            System.out.format("{%s} {%s}",Arrays.deepToString(stackTrace),message);
+
         }
     }
 }

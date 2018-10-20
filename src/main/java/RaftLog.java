@@ -29,6 +29,7 @@
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.SneakyThrows;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,10 +39,24 @@ import java.util.List;
  */
 @Data
 public class RaftLog {
+    // storage contains all stable entries since the last snapshot.
     Storage storage;
     RaftLogger logger;
+
+    // unstable contains all unstable entries and snapshot.
+    // they will be saved into storage.
     Unstable unstable;
-    long applied, maxMsgSize, committed;
+
+    // applied is the highest log position that the application has
+    // been instructed to apply to its state machine.
+    // Invariant: applied <= committed
+    long applied;
+
+    long maxMsgSize;
+
+    // committed is the highest log position that is known to be in
+    // stable storage on a quorum of nodes.
+    long committed;
 
     public RaftLog(Storage storage, RaftLogger logger, long maxMsgSize) {
         this.storage = storage;
@@ -49,6 +64,16 @@ public class RaftLog {
         this.maxMsgSize = maxMsgSize;
     }
 
+    /**
+     * newLogWithSize returns a log using the given storage and max
+     * message size.
+     * @finished
+     * @param storage
+     * @param logger
+     * @param maxMsgSize
+     * @return
+     * @throws Exception
+     */
     public static RaftLog newLogWithSize(Storage storage, RaftLogger logger, long maxMsgSize) throws Exception {
         if (storage == null) {
             Util.panic("storage must not be nil");
@@ -59,10 +84,22 @@ public class RaftLog {
         log.unstable = Unstable.builder().entries(new ArrayList<>()).build();
         log.unstable.offset = lastIndex + 1;
         log.unstable.logger = logger;
+        // Initialize our committed and applied pointers to the time of the last compaction.
         log.committed = firstIndex - 1;
         log.applied = firstIndex - 1;
         return log;
     }
+
+    /**
+     * newLog returns log using the given storage and default options. It
+     * recovers the log to the state that it just commits and applies the
+     * latest snapshot.
+     * @finished
+     * @param storage
+     * @param logger
+     * @return
+     * @throws Exception
+     */
     public static RaftLog newLog(Storage storage, RaftLogger logger) throws Exception {
         return newLogWithSize(storage, logger, Raft.noLimit);
     }
@@ -165,7 +202,8 @@ public class RaftLog {
         return this.storage.firstIndex();
     }
 
-    public long lastIndex() throws Exception {
+    @SneakyThrows
+    public long lastIndex(){
         Unstable.MaybeResult maybeResult = this.unstable.maybeLastIndex();
         if (maybeResult.isHasSnapshot()) {
             return maybeResult.getValue();
@@ -336,5 +374,18 @@ public class RaftLog {
     }
     public void stableSnapTo(long i){
         this.unstable.stableSnapTo(i);
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("RaftLog{");
+        sb.append("storage=").append(storage);
+        sb.append(", logger=").append(logger);
+        sb.append(", unstable=").append(unstable);
+        sb.append(", applied=").append(applied);
+        sb.append(", maxMsgSize=").append(maxMsgSize);
+        sb.append(", committed=").append(committed);
+        sb.append('}');
+        return sb.toString();
     }
 }
