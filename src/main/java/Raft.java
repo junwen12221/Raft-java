@@ -150,7 +150,7 @@ public class Raft {
      */
     public static Raft newRaft(Config c) throws Exception {
         c.validate();
-        RaftLog raftLog = RaftLog.newLogWithSize(c.getStorage(), (RaftLogger) c.getLogger(), c.getMaxSizePerMsg());
+        RaftLog raftLog = RaftLog.newLogWithSize(c.getStorage(), c.getLogger(), c.getMaxSizePerMsg());
         Storage.State state = c.getStorage().initialSate();
         Raftpb.HardState hs = state.getHardState();
         Raftpb.ConfState cs = state.getConfState();
@@ -759,7 +759,7 @@ public class Raft {
      * @throws Exception
      * @finished
      */
-    private void appendEntry(List<Raftpb.Entry> es) throws Exception {
+    public void appendEntry(List<Raftpb.Entry> es) throws Exception {
         long li = this.raftLog.lastIndex();
         int size = es.size();
         for (int i = 0; i < size; i++) {
@@ -979,7 +979,7 @@ public class Raft {
         switch (type) {
             case MsgHup:
                 if (this.state != StateType.StateLeader) {
-                    List<Raftpb.Entry> ents = null;
+                    List<Raftpb.Entry> ents = Collections.EMPTY_LIST;
                     try {
                         ents = this.raftLog.slice(this.raftLog.applied + 1, this.raftLog.committed + 1, noLimit);
                     } catch (Exception err) {
@@ -1074,7 +1074,7 @@ public class Raft {
      * @param f
      * @finished
      */
-    public void forEachUpdateProgress(BiFunction<Long, Process, Process> f) throws Exception {
+    public void forEachUpdateProgress(BiFunction<Long, Process, Process> f) {
         for (Map.Entry<Long, Process> entry : this.prs.entrySet()) {
             entry.setValue(f.apply(entry.getKey(), entry.getValue()));
         }
@@ -1284,9 +1284,8 @@ public class Raft {
      * @finished
      * @param id
      * @param isLeader
-     * @throws Exception
      */
-    public void addNodeOrLearnerNode(long id, boolean isLeader) throws Exception {
+    public void addNodeOrLearnerNode(long id, boolean isLeader) {
         Process pr = this.getProgress(id);
         if (pr == null) {
             this.setProgress(id, 0, this.raftLog.lastIndex() + 1, isLeader);
@@ -1426,9 +1425,8 @@ public class Raft {
      * @finished
      * @param nodes
      * @param isLeader
-     * @throws Exception
      */
-    public void restoreNode(List<Long> nodes, boolean isLeader) throws Exception {
+    public void restoreNode(List<Long> nodes, boolean isLeader) {
         for (long n : nodes) {
             long match = 0;
             long next = this.raftLog.lastIndex() + 1;
@@ -1509,9 +1507,8 @@ public class Raft {
     /**
      * @finished
      * @param state
-     * @throws Exception
      */
-    public void loadState(Raftpb.HardState state) throws Exception {
+    public void loadState(Raftpb.HardState state) {
         if (state.getCommit() < this.raftLog.getCommitted() ||
                 state.getCommit() > this.raftLog.lastIndex()) {
             this.logger.panicf("%x state.commit %d is out of range [%d, %d]", this.id, state.commit, this.raftLog.committed, this.raftLog.lastIndex());
@@ -1649,7 +1646,7 @@ public class Raft {
         return true;
     }
 
-    public void restore(long[] nodes, boolean isLeader) throws Exception {
+    public void restore(long[] nodes, boolean isLeader) {
         int size = nodes.length;
         for (int i = 0; i < size; i++) {
             long n = nodes[i];
@@ -1713,6 +1710,9 @@ public class Raft {
      * @return
      */
     public int numOfPendingConf(List<Raftpb.Entry> ents) {
+        if (ents == null) {
+            ents = Collections.EMPTY_LIST;
+        }
         int n = 0;
         for (Raftpb.Entry ent : ents) {
             if (ent.getType() == Raftpb.EntryType.ConfChange) {

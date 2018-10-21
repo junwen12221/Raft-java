@@ -64,17 +64,12 @@ public class RaftTestUtil {
         List<Raftpb.Entry> readMessage();
     }
 
-    class StateMachineImpl implements StateMachine {
-        @Override
-        public void step(Raftpb.Message m) throws Exception {
-
+    public static List<Long> idsBySize(int size) {
+        long[] ids = new long[size];
+        for (int i = 0; i < size; i++) {
+            ids[i] = 1L + i;
         }
-
-        @Override
-        public List<Raftpb.Entry> readMessage() {
-
-            return null;
-        }
+        return Arrays.stream(ids).boxed().collect(Collectors.toList());
     }
 
     public static List<Raftpb.Message> readMessages(Raft r) {
@@ -85,7 +80,7 @@ public class RaftTestUtil {
 
     public static class BlackHole implements StateMachine {
         @Override
-        public void step(Raftpb.Message m) throws Exception {
+        public void step(Raftpb.Message m) {
 
         }
 
@@ -95,7 +90,6 @@ public class RaftTestUtil {
         }
     }
 
-    ;
     public final static BlackHole nopStepper = new BlackHole();
 
     public Raft entsWithConfig(Consumer<Config> configFunc, long... terms) throws Exception {
@@ -143,7 +137,7 @@ public class RaftTestUtil {
 
         public Network newNetworkWithConfig(Consumer<Config> configFunc, Object... peers) throws Exception {
             int size = peers.length;
-            List<Long> peerAddrs = Arrays.stream(idsBySize(size)).boxed().collect(Collectors.toList());
+            List<Long> peerAddrs = idsBySize(size);
 
             Map<Long, Object> npeers = new HashMap<>(size);
             Map<Long, MemoryStorage> nstoage = new HashMap<>(size);
@@ -160,7 +154,7 @@ public class RaftTestUtil {
                     Raft sm = Raft.newRaft(cfg);
                     npeers.put(id, sm);
                 } else if (p instanceof BlackHole) {
-                    npeers.put(id, (BlackHole) p);
+                    npeers.put(id, p);
                 } else if (p instanceof Raft) {
                     Map<Long, Boolean> leaders = new HashMap<>();
                     Raft v = (Raft) p;
@@ -286,12 +280,17 @@ public class RaftTestUtil {
         }
     }
 
-    public static long[] idsBySize(int size) {
-        long[] ids = new long[size];
-        for (int i = 0; i < size; i++) {
-            ids[i] = 1L + i;
+    class StateMachineImpl implements StateMachine {
+        @Override
+        public void step(Raftpb.Message m) {
+
         }
-        return ids;
+
+        @Override
+        public List<Raftpb.Entry> readMessage() {
+
+            return null;
+        }
     }
 
     public static void setRandomizedElectionTimeout(Raft r, int v) {

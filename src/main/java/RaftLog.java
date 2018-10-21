@@ -32,6 +32,7 @@ import lombok.Data;
 import lombok.SneakyThrows;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /***
@@ -139,7 +140,7 @@ public class RaftLog {
     }
 
 
-    public long append(List<Raftpb.Entry> ents) throws Exception {
+    public long append(List<Raftpb.Entry> ents) {
         if (ents == null){
             ents = new ArrayList<>();
         }
@@ -155,7 +156,7 @@ public class RaftLog {
     }
 
 
-    public long finConflct(List<Raftpb.Entry> ents) throws Exception {
+    public long finConflct(List<Raftpb.Entry> ents) {
 
         for (Raftpb.Entry ne : ents) {
             if (!this.matchTerm(ne.getIndex(), ne.getTerm())) {
@@ -211,7 +212,7 @@ public class RaftLog {
         return this.storage.lastIndex();
     }
 
-    public long lastTerm() throws Exception {
+    public long lastTerm() {
         try {
             return this.term(this.lastIndex());
         } catch (Exception err) {
@@ -232,7 +233,7 @@ public class RaftLog {
         return this.storage.term(i);
     }
 
-    public void commitTo(long tocommit)throws Exception {
+    public void commitTo(long tocommit) {
         if (this.committed<tocommit){
             if (this.lastIndex()<tocommit){
                 this.logger.panicf("tocommit(%d) is out of range [lastIndex(%d)]. Was the raft log corrupted, truncated, or lost?", tocommit, this.lastIndex());
@@ -260,7 +261,7 @@ public class RaftLog {
         return this.slice(i, l, maxsize);
     }
 
-    public List<Raftpb.Entry> allEntries() throws Exception {
+    public List<Raftpb.Entry> allEntries() {
         try {
             List<Raftpb.Entry> ents = this.entries(this.firstIndex(), Raft.noLimit);
             return ents;
@@ -312,10 +313,10 @@ public class RaftLog {
     public List<Raftpb.Entry> slice(long lo, long hi, long maxSize) throws Exception {
         Exception exception = this.mustCheckOutOfBounds(lo, hi);
         if (exception != null) {
-            return null;
+            return Collections.EMPTY_LIST;
         }
         if (lo == hi) {
-            return null;
+            return Collections.EMPTY_LIST;
         }
         List<Raftpb.Entry> ents = null;
         if (lo < this.unstable.offset) {

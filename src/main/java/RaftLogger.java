@@ -61,8 +61,8 @@ public interface RaftLogger {
     void panicf(String format, Object... v);
 
 
-    final static  int calldepth = Integer.MAX_VALUE;
-    final static DefaultLogger raftLogger  = new DefaultLogger();
+    int calldepth = Integer.MAX_VALUE;
+    DefaultLogger raftLogger = new DefaultLogger();
 
     class DefaultLogger implements RaftLogger{
        boolean debug = false;
@@ -150,8 +150,8 @@ public interface RaftLogger {
         }
         public void output(int calldepth,String message){
 //            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-//            logger.debug("{} {}",Arrays.deepToString(stackTrace),message);
-            System.out.format("{%s} {%s}","",message);
+            logger.debug("{} {}", "", message);
+            System.out.format("{%s} {%s} \n", "", message);
 
         }
     }
