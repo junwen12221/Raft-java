@@ -311,6 +311,38 @@ public class RaftPaperTest {
         }
     }
 
+    // TestCandidateFallback tests that while waiting for votes,
+    // if a candidate receives an AppendEntries RPC from another server claiming
+    // to be leader whose term is at least as large as the candidate's current term,
+    // it recognizes the leader as legitimate and returns to follower state.
+    // Reference: section 5.2
+    @Test
+    public void testCandidateFallback() throws Exception {
+        Raftpb.Message m1 = Raftpb.Message.builder().from(2).to(1).term(1).type(Raftpb.MessageType.MsgApp).build();
+        Raftpb.Message m2 = Raftpb.Message.builder().from(2).to(1).term(2).type(Raftpb.MessageType.MsgApp).build();
+        List<Raftpb.Message> tests = Arrays.asList(m1, m2);
+
+        int i = 0;
+        for (Raftpb.Message tt : tests) {
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, MemoryStorage.newMemoryStorage());
+            r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgHup).build());
+
+            if (r.state != Raft.StateType.StateCandidate) {
+                Assert.fail(String.format("unexpected state = %s, want %s", r.state, Raft.StateType.StateCandidate));
+            }
+
+            r.step(tt);
+
+            if (r.getState() != Raft.StateType.StateFollower) {
+                RaftTestUtil.errorf("#%d: state = %s, want %s", i, r.getState(), Raft.StateType.StateFollower);
+            }
+            if (r.getTerm() != tt.getTerm()) {
+                RaftTestUtil.errorf("#%d: term = %d, want %d", i, r.getTerm(), tt.term);
+            }
+        }
+
+    }
+
     @AllArgsConstructor
     @Builder
     @Value
