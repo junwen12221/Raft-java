@@ -434,8 +434,84 @@ public class RaftPaperTest {
         }
         double g = conflicts * 1.0 / 1000;
         if (g > 0.3) {
-            Assert.fail(String.format("probability of conflicts = %v, want <= 0.3", g));
+            Assert.fail(String.format("probability of conflicts = %f, want <= 0.3", g));
         }
+    }
+
+    // TestLeaderStartReplication tests that when receiving client proposals,
+    // the leader appends the proposal to its log as a new entry, then issues
+    // AppendEntries RPCs in parallel to each of the other servers to replicate
+    // the entry. Also, when sending an AppendEntries RPC, the leader includes
+    // the index and term of the entry in its log that immediately precedes
+    // the new entries.
+    // Also, it writes the new entry into stable storage.
+    // Reference: section 5.3
+    @Test
+    public void testLeaderStartReplication() throws Exception {
+        MemoryStorage s = MemoryStorage.newMemoryStorage();
+        Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, s);
+        r.becomeCandidate();
+        r.becomeLeader();
+        commitNoopEntry(r, s);
+        long li = r.raftLog.lastIndex();
+
+        List<Raftpb.Entry> ents = Arrays.asList(Raftpb.Entry.builder().data("some data".getBytes()).build());
+        r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp).entries(ents).build());
+
+        long g = r.raftLog.lastIndex();
+        if (g != li + 1) {
+            RaftTestUtil.errorf("lastIndex = %d, want %d", g, li + 1);
+        }
+        g = r.raftLog.committed;
+        if (g != li) {
+            RaftTestUtil.errorf("committed = %d, want %d", g, li);
+        }
+        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+        msgs.sort(Comparator.comparing(Raftpb.Message::toString));
+
+        List<Raftpb.Entry> wents = Arrays.asList(Raftpb.Entry.builder().index(li + 1).term(1).data("some data".getBytes()).build());
+
+        Raftpb.Message c1 = Raftpb.Message.builder()
+                .from(1).to(2).term(1).type(Raftpb.MessageType.MsgApp).index(li).logTerm(1).entries(wents).commit(1).build();
+        Raftpb.Message c2 = Raftpb.Message.builder()
+                .from(1).to(3).term(1).type(Raftpb.MessageType.MsgApp).index(li).logTerm(1).entries(wents).commit(1).build();
+
+        List<Raftpb.Message> wmsgs = Arrays.asList(c1, c2);
+        if (!msgs.equals(wmsgs)) {
+            Assert.fail(String.format("msgs = %s, want %s", msgs.toString(), wmsgs.toString()));
+        }
+
+        if (!r.raftLog.unstableEntries().equals(wents)) {
+            RaftTestUtil.errorf("ents = %s, want %s", r.raftLog.unstableEntries(), wents);
+        }
+    }
+
+    public void commitNoopEntry(Raft r, MemoryStorage s) throws Exception {
+        if (r.state != Raft.StateType.StateLeader) {
+            Util.panic("it should only be used when it is the leader");
+        }
+        r.bcastAppend();
+        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+
+        for (Raftpb.Message msg : msgs) {
+            if (msg.getType() != Raftpb.MessageType.MsgApp || Util.len(msg.getEntries()) != 1 || msg.getEntries().get(0).getData() != null) {
+                Util.panic("not a message to append noop entry");
+            }
+            r.step(acceptAndReply(msg));
+        }
+        RaftTestUtil.readMessages(r);
+        s.append(r.getRaftLog().unstableEntries());
+        r.raftLog.appliesTo(r.raftLog.committed);
+        r.raftLog.stableTo(r.raftLog.lastIndex(), r.raftLog.lastTerm());
+
+    }
+
+    private Raftpb.Message acceptAndReply(Raftpb.Message msg) {
+        if (msg.getType() != Raftpb.MessageType.MsgApp) {
+            Util.panic("type should be MsgApp");
+        }
+        return Raftpb.Message.builder().from(msg.to).to(msg.from).type(Raftpb.MessageType.MsgAppResp)
+                .index(msg.index + Util.len(msg.getEntries())).build();
     }
 
     @AllArgsConstructor
