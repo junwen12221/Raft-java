@@ -340,7 +340,47 @@ public class RaftPaperTest {
                 RaftTestUtil.errorf("#%d: term = %d, want %d", i, r.getTerm(), tt.term);
             }
         }
+    }
 
+    @Test
+    public void testFollowerElectionTimeoutRandomized() throws Exception {
+        testNonleaderElectionTimeoutRandomized(Raft.StateType.StateFollower);
+    }
+
+    @Test
+    public void testCandidateElectionTimeoutRandomized() throws Exception {
+        testNonleaderElectionTimeoutRandomized(Raft.StateType.StateCandidate);
+    }
+
+    // testNonleaderElectionTimeoutRandomized tests that election timeout for
+    // follower or candidate is randomized.
+    // Reference: section 5.2
+    public void testNonleaderElectionTimeoutRandomized(Raft.StateType state) throws Exception {
+        int et = 10;
+        Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), et, 1, MemoryStorage.newMemoryStorage());
+        Map<Integer, Boolean> timeouts = new HashMap<>();
+        for (int round = 0; round < 50 * et; round++) {
+            switch (state) {
+                case StateFollower:
+                    r.becomeFollower(r.getTerm() + 1, 2);
+                    break;
+                case StateCandidate:
+                    r.becomeCandidate();
+                    break;
+            }
+
+            int time = 0;
+            while (0 == Util.len(RaftTestUtil.readMessages(r))) {
+                r.tick.run();
+                time++;
+            }
+            timeouts.put(time, true);
+        }
+        for (int d = et + 1; d < 2 * et; d++) {
+            if (!timeouts.get(d)) {
+                RaftTestUtil.errorf("timeout in %d ticks should happen", d);
+            }
+        }
     }
 
     @AllArgsConstructor
