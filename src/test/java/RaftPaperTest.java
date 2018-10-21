@@ -255,7 +255,6 @@ public class RaftPaperTest {
         );
         int i = 0;
         for (LeaderElectionInOneRoundRPCCase test : tests) {
-            ++i;
 
             Raft r = RaftTestUtil.newTestRaft(1, RaftTestUtil.idsBySize(test.size), 10, 1, MemoryStorage.newMemoryStorage());
 
@@ -273,7 +272,7 @@ public class RaftPaperTest {
             if (g != 1) {
                 RaftTestUtil.errorf("#%d: state = %s, want %s", i, g, 1);
             }
-
+            ++i;
         }
     }
 
@@ -484,6 +483,60 @@ public class RaftPaperTest {
         if (!r.raftLog.unstableEntries().equals(wents)) {
             RaftTestUtil.errorf("ents = %s, want %s", r.raftLog.unstableEntries(), wents);
         }
+    }
+
+    // TestLeaderCommitEntry tests that when the entry has been safely replicated,
+    // the leader gives out the applied entries, which can be applied to its state
+    // machine.
+    // Also, the leader keeps track of the highest index it knows to be committed,
+    // and it includes that index in future AppendEntries RPCs so that the other
+    // servers eventually find out.
+    // Reference: section 5.3
+    @Test
+    public void testLeaderCommitEntry() throws Exception {
+        MemoryStorage s = MemoryStorage.newMemoryStorage();
+        Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, s);
+        r.becomeCandidate();
+        r.becomeLeader();
+        commitNoopEntry(r, s);
+        long li = r.raftLog.lastIndex();
+
+        List<Raftpb.Entry> ents = Arrays.asList(Raftpb.Entry.builder().data("some data".getBytes()).build());
+        r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp).entries(ents).build());
+
+        List<Raftpb.Message> messages = RaftTestUtil.readMessages(r);
+        for (Raftpb.Message m : messages) {
+            r.step(acceptAndReply(m));
+        }
+
+        long g = 0;
+        g = r.raftLog.committed;
+        if (g != li + 1) {
+            RaftTestUtil.errorf("committed = %d, want %d", g, li + 1);
+        }
+        List<Raftpb.Entry> wents = Arrays.asList(Raftpb.Entry.builder().index(li + 1).term(1).data("some data".getBytes()).build());
+        List<Raftpb.Entry> entries = r.raftLog.nextEnts();
+        if (!entries.equals(wents)) {
+            RaftTestUtil.errorf("nextEnts = %+v, want %s", entries, wents);
+        }
+        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+        msgs.sort(Comparator.comparing(Raftpb.Message::toString));
+        int i = 0;
+        for (Raftpb.Message m : msgs) {
+            long w = i + 2;
+            if (m.to != w) {
+                RaftTestUtil.errorf("to = %x, want %x", m.to, w);
+            }
+            if (m.getType() != Raftpb.MessageType.MsgApp) {
+                RaftTestUtil.errorf("type = %v, want %v", m.type, Raftpb.MessageType.MsgApp);
+            }
+            if (m.commit != li + 1) {
+                RaftTestUtil.errorf("commit = %d, want %d", m.commit, li + 1);
+            }
+            ++i;
+        }
+
+
     }
 
     public void commitNoopEntry(Raft r, MemoryStorage s) throws Exception {
