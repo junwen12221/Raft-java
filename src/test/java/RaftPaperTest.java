@@ -383,6 +383,61 @@ public class RaftPaperTest {
         }
     }
 
+    @Test
+    public void testFollowersElectionTimeoutNonconflict() throws Exception {
+        testNonleadersElectionTimeoutNonconflict(Raft.StateType.StateFollower);
+    }
+
+    @Test
+    public void testCandidatesElectionTimeoutNonconflict() throws Exception {
+        testNonleadersElectionTimeoutNonconflict(Raft.StateType.StateCandidate);
+    }
+
+    // testNonleadersElectionTimeoutNonconflict tests that in most cases only a
+    // single server(follower or candidate) will time out, which reduces the
+    // likelihood of split vote in the new election.
+    // Reference: section 5.2
+    public void testNonleadersElectionTimeoutNonconflict(Raft.StateType state) throws Exception {
+        int et = 10;
+        int size = 5;
+        Raft[] rs = new Raft[size];
+        List<Long> ids = RaftTestUtil.idsBySize(size);
+        for (int i = 0; i < size; i++) {
+            rs[i] = RaftTestUtil.newTestRaft(ids.get(i), ids, et, 1, MemoryStorage.newMemoryStorage());
+        }
+        int conflicts = 0;
+        for (int round = 0; round < 1000; round++) {
+            for (Raft r : rs) {
+                switch (state) {
+                    case StateFollower:
+                        r.becomeFollower(r.getTerm() + 1, Raft.None);
+                        break;
+                    case StateCandidate:
+                        r.becomeCandidate();
+                        break;
+                }
+            }
+
+            int timeoutNum = 0;
+            while (timeoutNum == 0) {
+                for (Raft r : rs) {
+                    r.tick.run();
+                    if (Util.len(RaftTestUtil.readMessages(r)) > 0) {
+                        timeoutNum++;
+                    }
+                }
+            }
+            // several rafts time out at the same tick
+            if (timeoutNum > 1) {
+                conflicts++;
+            }
+        }
+        double g = conflicts * 1.0 / 1000;
+        if (g > 0.3) {
+            Assert.fail(String.format("probability of conflicts = %v, want <= 0.3", g));
+        }
+    }
+
     @AllArgsConstructor
     @Builder
     @Value
