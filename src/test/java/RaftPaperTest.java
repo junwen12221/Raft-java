@@ -155,6 +155,10 @@ public class RaftPaperTest {
         }
     }
 
+    /**
+     * @throws Exception
+     * @todo sometime test fail
+     */
     @Test
     public void testFollowerStartElection() throws Exception {
         testNonleaderStartElection(Raft.StateType.StateFollower);
@@ -626,6 +630,72 @@ public class RaftPaperTest {
             ++i;
         }
 
+    }
+
+    FollowerCommitEntryCase Case(List<Raftpb.Entry> ents,
+                                 long commit) {
+        return new FollowerCommitEntryCase(ents, commit);
+    }
+
+    @Test
+    public void testFollowerCommitEntry() throws Exception {
+        List<FollowerCommitEntryCase> tests = Arrays.asList(
+                Case(Arrays.asList(Raftpb.Entry.builder().term(1).index(1).data("some data".getBytes()).build()), 1),
+                Case(Arrays.asList(
+                        Raftpb.Entry.builder().term(1).index(1).data("some data".getBytes()).build(),
+                        Raftpb.Entry.builder().term(1).index(2).data("some data2".getBytes()).build()
+                ), 2),
+                Case(Arrays.asList(
+                        Raftpb.Entry.builder().term(1).index(1).data("some data2".getBytes()).build(),
+                        Raftpb.Entry.builder().term(1).index(2).data("some data".getBytes()).build()
+                ), 2),
+                Case(Arrays.asList(
+                        Raftpb.Entry.builder().term(1).index(1).data("some data".getBytes()).build(),
+                        Raftpb.Entry.builder().term(1).index(2).data("some data2".getBytes()).build()
+                ), 1)
+        );
+
+        int i = 0;
+        for (FollowerCommitEntryCase tt : tests) {
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, MemoryStorage.newMemoryStorage());
+
+            r.becomeFollower(1, 2);
+
+            r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgApp).term(1)
+                    .entries(tt.ents)
+                    .commit(tt.commit)
+                    .build());
+
+            if (r.raftLog.committed != tt.commit) {
+                RaftTestUtil.errorf("#%d: committed = %d, want %d", i, r.raftLog.committed, tt.commit);
+            }
+
+            List<Raftpb.Entry> wents = tt.ents.subList(0, (int) tt.commit);
+
+            List<Raftpb.Entry> g = r.raftLog.nextEnts();
+            if (!g.equals(wents)) {
+                RaftTestUtil.errorf("#%d: nextEnts = %s, want %s", i, g.toString(), wents.toString());
+            }
+        }
+
+    }
+
+    // TestFollowerCheckMsgApp tests that if the follower does not find an
+    // entry in its log with the same index and term as the one in AppendEntries RPC,
+    // then it refuses the new entries. Otherwise it replies that it accepts the
+    // append entries.
+    // Reference: section 5.3
+    @Test
+    public void testFollowerCheckMsgApp() {
+
+    }
+
+    @AllArgsConstructor
+    @Value
+    @Builder
+    static class FollowerCommitEntryCase {
+        List<Raftpb.Entry> ents;
+        long commit;
     }
 
     @AllArgsConstructor

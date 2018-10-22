@@ -117,7 +117,7 @@ public class Raft {
 
     int heartbeatTimeout, electionTimeout;
 
-    // randomizedElectionTimeout is a random number between
+    // resetRandomizedElectionTimeout is a random number between
     // [electiontimeout, 2 * electiontimeout - 1]. It gets reset
     // when raft changes its state to follower or candidate.
     int randomizedElectionTimeout;
@@ -1327,18 +1327,16 @@ public class Raft {
     /**
      * @finished
      * @param id
-     * @throws Exception
      */
-    public void addNode(long id) throws Exception {
+    public void addNode(long id) {
         this.addNodeOrLearnerNode(id, false);
     }
 
     /**
      * @finished
      * @param id
-     * @throws Exception
      */
-    public void addLearner(long id) throws Exception {
+    public void addLearner(long id) {
         this.addNodeOrLearnerNode(id, true);
     }
 
@@ -1455,7 +1453,7 @@ public class Raft {
         this.electionElapsed = 0;
         this.heartbeatElapsed = 0;
 
-        this.randomizedElectionTimeout();
+        this.resetRandomizedElectionTimeout();
 
         this.abortLeaderTransfer();
 
@@ -1536,10 +1534,10 @@ public class Raft {
     /**
      * @finished
      */
-    private void randomizedElectionTimeout() {
+    private void resetRandomizedElectionTimeout() {
         this.randomizedElectionTimeout =
                 this.electionTimeout +
-                        ThreadLocalRandom.current().nextInt(this.electionTimeout + 2);
+                        ThreadLocalRandom.current().nextInt(this.electionTimeout);
 
     }
 
@@ -1592,9 +1590,8 @@ public class Raft {
     /**
      * @finished
      * @param m
-     * @throws Exception
      */
-    public void handleHeartbeat(Raftpb.Message m) throws Exception {
+    public void handleHeartbeat(Raftpb.Message m) {
         this.raftLog.commitTo(m.getCommit());
         this.send(Raftpb.Message.builder()
                 .to(m.getFrom())
@@ -1610,9 +1607,8 @@ public class Raft {
      * @finished
      * @param s
      * @return
-     * @throws Exception
      */
-    public boolean restore(Raftpb.Snapshot s) throws Exception {
+    public boolean restore(Raftpb.Snapshot s) {
         Raft r = this;
         if (s.getMetadata().getIndex() <= this.raftLog.getCommitted()) {
             return false;
