@@ -585,7 +585,46 @@ public class RaftPaperTest {
             }
             ++i;
         }
+    }
 
+    // TestLeaderCommitPrecedingEntries tests that when leader commits a log entry,
+    // it also commits all preceding entries in the leader’s log, including
+    // entries created by previous leaders.
+    // Also, it applies the entry to its local state machine (in log order).
+    // Reference: section 5.3
+    @Test
+    public void testLeaderCommitPrecedingEntries() throws Exception {
+        List<List<Raftpb.Entry>> tests = Arrays.asList(
+                Arrays.asList(),
+                Arrays.asList(Raftpb.Entry.builder().term(2).index(1).build()),
+                Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build(), Raftpb.Entry.builder().term(2).index(2).build()),
+                Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build())
+        );
+        int i = 0;
+        for (List<Raftpb.Entry> tt : tests) {
+            MemoryStorage storage = MemoryStorage.newMemoryStorage();
+            storage.append(tt);
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, storage);
+            r.loadState(Raftpb.HardState.builder().term(2).build());
+            r.becomeCandidate();
+            r.becomeLeader();
+            r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp).entries(Arrays.asList(Raftpb.Entry.builder().data("some data".getBytes()).build())).build());
+
+            for (Raftpb.Message m : RaftTestUtil.readMessages(r)) {
+                r.step(acceptAndReply(m));
+            }
+            long li = Util.len(tt);
+            List<Raftpb.Entry> wents = new ArrayList<>(tt);
+            wents.addAll(Arrays.asList(
+                    Raftpb.Entry.builder().term(3).index(li + 1).build(),
+                    Raftpb.Entry.builder().term(3).index(li + 2).data("some data".getBytes()).build()
+            ));
+            List<Raftpb.Entry> g = r.raftLog.nextEnts();
+            if (!g.equals(wents)) {
+                RaftTestUtil.errorf("#%d: ents = %s, want %s", i, g.toString(), wents.toString());
+            }
+            ++i;
+        }
 
     }
 
