@@ -157,7 +157,6 @@ public class RaftPaperTest {
 
     /**
      * @throws Exception
-     * @todo sometime test fail
      */
     @Test
     public void testFollowerStartElection() throws Exception {
@@ -680,14 +679,166 @@ public class RaftPaperTest {
 
     }
 
+    FollowerCheckMsgAppCase Case(
+            long term, long index, long windex,
+            boolean wreject,
+            long wrejectHint
+    ) {
+        return new FollowerCheckMsgAppCase(term, index, windex, wreject, wrejectHint);
+    }
+
     // TestFollowerCheckMsgApp tests that if the follower does not find an
     // entry in its log with the same index and term as the one in AppendEntries RPC,
     // then it refuses the new entries. Otherwise it replies that it accepts the
     // append entries.
     // Reference: section 5.3
     @Test
-    public void testFollowerCheckMsgApp() {
+    public void testFollowerCheckMsgApp() throws Exception {
+        List<Raftpb.Entry> ents = Arrays.asList(
+                Raftpb.Entry.builder().term(1).index(1).build(),
+                Raftpb.Entry.builder().term(2).index(2).build());
+        List<FollowerCheckMsgAppCase> tests = Arrays
+                .asList(
+                        Case(0, 0, 1, false, 0),
+                        Case(ents.get(0).getTerm(), ents.get(0).getIndex(), 1,
+                                false, 0),
+                        Case(ents.get(1).getTerm(), ents.get(1).getIndex(), 2,
+                                false, 0),
 
+                        Case(ents.get(0).getTerm(), ents.get(1).getIndex(), ents.get(1).getIndex(),
+                                true, 2),
+                        Case(ents.get(1).getTerm() + 1, ents.get(1).getIndex() + 1, ents.get(1).getIndex() + 1,
+                                true, 2)
+                );
+
+        int i = 0;
+        for (FollowerCheckMsgAppCase tt : tests) {
+            MemoryStorage storage = MemoryStorage.newMemoryStorage();
+            storage.append(ents);
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, storage);
+            r.loadState(Raftpb.HardState.builder().commit(1).build());
+            r.becomeFollower(2, 2);
+
+            r.step(Raftpb.Message.builder().from(2).to(1).type(Raftpb.MessageType.MsgApp)
+                    .term(2)
+                    .logTerm(tt.term)
+                    .index(tt.index)
+                    .build());
+            List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+            List<Raftpb.Message> wmsgs = Arrays.asList(Raftpb.Message.builder().from(1).to(2).type(Raftpb.MessageType.MsgAppResp)
+                    .term(2)
+                    .index(tt.windex)
+                    .reject(tt.wreject)
+                    .rejectHint(tt.wrejectHint)
+                    .build());
+
+            if (!wmsgs.equals(msgs)) {
+                RaftTestUtil.errorf("#%d: msgs = %s, want %s", i, msgs.toString(), wmsgs.toString());
+            }
+            ++i;
+        }
+    }
+
+    FollowerAppendEntriesCase Case(
+            long index,
+            long term,
+            List<Raftpb.Entry> ents,
+            List<Raftpb.Entry> wents,
+            List<Raftpb.Entry> wunstable
+    ) {
+        return new FollowerAppendEntriesCase(index, term, ents, wents, wunstable);
+    }
+
+    // TestFollowerAppendEntries tests that when AppendEntries RPC is valid,
+    // the follower will delete the existing conflict entry and all that follow it,
+    // and append any new entries not already in the log.
+    // Also, it writes the new entry into stable storage.
+    // Reference: section 5.3
+    @Test
+    public void testFollowerAppendEntries() throws Exception {
+        List<FollowerAppendEntriesCase> tests = Arrays.asList(
+                Case(2, 2,
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(3).build()),
+                        Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build(),
+                                Raftpb.Entry.builder().term(2).index(2).build(),
+                                Raftpb.Entry.builder().term(3).index(3).build()
+                        ),
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(3).build())
+                ),
+                Case(1, 1,
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(2).build(),
+                                Raftpb.Entry.builder().term(4).index(3).build()
+                        ),
+                        Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build(),
+                                Raftpb.Entry.builder().term(3).index(2).build(),
+                                Raftpb.Entry.builder().term(4).index(3).build()
+                        ),
+                        Arrays.asList(
+                                Raftpb.Entry.builder().term(3).index(2).build(),
+                                Raftpb.Entry.builder().term(4).index(3).build()
+                        )
+                ),
+                Case(0, 0,
+                        Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build()
+                        ),
+                        Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build(),
+                                Raftpb.Entry.builder().term(2).index(2).build()
+                        ),
+                        null
+                ),
+                Case(0, 0,
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(1).build()
+                        ),
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(1).build()
+                        ),
+                        Arrays.asList(Raftpb.Entry.builder().term(3).index(1).build())
+                )
+        );
+        int i = 0;
+        for (FollowerAppendEntriesCase tt : tests) {
+            MemoryStorage storage = MemoryStorage.newMemoryStorage();
+            storage.append(Arrays.asList(Raftpb.Entry.builder().term(1).index(1).build()
+                    ,
+                    Raftpb.Entry.builder().term(2).index(2).build()));
+
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, storage);
+            r.becomeFollower(2, 2);
+
+            r.step(Raftpb.Message.builder().from(2).to(1).type(Raftpb.MessageType.MsgApp).term(2).logTerm(tt.term)
+                    .index(tt.index)
+                    .entries(tt.ents)
+                    .build());
+
+            if (!r.raftLog.allEntries().equals(tt.wents)) {
+                RaftTestUtil.errorf("#%d: ents = %s, want %s", i, r.raftLog.allEntries(), tt.wents);
+            }
+
+            if (!(r.raftLog.unstableEntries() == tt.wunstable || r.raftLog.unstableEntries().equals(tt.wunstable))) {
+                RaftTestUtil.errorf("#%d: unstableEnts = %s, want %s", i, r.raftLog.unstableEntries(), tt.wunstable);
+            }
+            ++i;
+        }
+
+    }
+
+    @AllArgsConstructor
+    @Builder
+    @Value
+    static class FollowerCheckMsgAppCase {
+        long term, index, windex;
+        boolean wreject;
+        long wrejectHint;
+    }
+
+    @AllArgsConstructor
+    @Builder
+    @Value
+    static class FollowerAppendEntriesCase {
+        long index;
+        long term;
+        List<Raftpb.Entry> ents;
+        List<Raftpb.Entry> wents;
+        List<Raftpb.Entry> wunstable;
     }
 
     @AllArgsConstructor
