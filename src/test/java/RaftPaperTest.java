@@ -535,8 +535,67 @@ public class RaftPaperTest {
             }
             ++i;
         }
+    }
+
+    LeaderAcknowledgeCommitCase Case(
+            int size,
+            Map<Long, Boolean> acceptors,
+            boolean wack
+    ) {
+        return new LeaderAcknowledgeCommitCase(size, acceptors, wack);
+    }
+
+    // TestLeaderAcknowledgeCommit tests that a log entry is committed once the
+    // leader that created the entry has replicated it on a majority of the servers.
+    // Reference: section 5.3
+    @Test
+    public void testLeaderAcknowledgeCommit() throws Exception {
+        List<LeaderAcknowledgeCommitCase> tests = Arrays.asList(
+                Case(1, null, true),
+                Case(3, null, false),
+                Case(3, MapOf(2, true), true),
+                Case(3, MapOf(2, true, 3, true), true),
+                Case(5, null, false),
+
+                Case(5, MapOf(2, true), false),
+                Case(5, MapOf(2, true, 3, true), true),
+                Case(5, MapOf(2, true, 3, true, 4, true), true),
+                Case(5, MapOf(2, true, 3, true, 4, true, 5, true), true)
+        );
+        int i = 0;
+        for (LeaderAcknowledgeCommitCase tt : tests) {
+            MemoryStorage s = MemoryStorage.newMemoryStorage();
+            Raft r = RaftTestUtil.newTestRaft(1, RaftTestUtil.idsBySize(tt.size), 10, 1, s);
+            r.becomeCandidate();
+            r.becomeLeader();
+            commitNoopEntry(r, s);
+            long li = r.raftLog.lastIndex();
+            r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp).entries(Arrays.asList(Raftpb.Entry.builder()
+                    .data("some data".getBytes())
+                    .build())).build());
+
+            for (Raftpb.Message m : RaftTestUtil.readMessages(r)) {
+                if (tt.acceptors != null && tt.acceptors.containsKey(m.to)) {
+                    r.step(acceptAndReply(m));
+                }
+            }
+            boolean g = r.raftLog.committed > li;
+            if (g != tt.wack) {
+                RaftTestUtil.errorf("#%d: ack commit = %b, want %b", i, g, tt.wack);
+            }
+            ++i;
+        }
 
 
+    }
+
+    @AllArgsConstructor
+    @Builder
+    @Value
+    static class LeaderAcknowledgeCommitCase {
+        int size;
+        Map<Long, Boolean> acceptors;
+        boolean wack;
     }
 
     public void commitNoopEntry(Raft r, MemoryStorage s) throws Exception {
