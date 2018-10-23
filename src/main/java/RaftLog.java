@@ -27,9 +27,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.SneakyThrows;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,10 +37,12 @@ import java.util.List;
  * cjw
  */
 @Data
+@EqualsAndHashCode
+@ToString
 public class RaftLog {
     // storage contains all stable entries since the last snapshot.
     Storage storage;
-    RaftLogger logger;
+    transient RaftLogger logger;
 
     // unstable contains all unstable entries and snapshot.
     // they will be saved into storage.
@@ -118,7 +118,7 @@ public class RaftLog {
 
     public static final MaybeAppendResult NULL = MaybeAppendResult.builder().lastnewi(0L).ok(false).build();
 
-    public MaybeAppendResult maybeAppend(long index, long logTerm, long commited, List<Raftpb.Entry> ents) throws Exception {
+    public MaybeAppendResult maybeAppend(long index, long logTerm, long commited, List<Raftpb.Entry> ents) {
         if (this.matchTerm(index, logTerm)) {
             if (ents == null){
                 ents = new ArrayList<>();
@@ -274,7 +274,7 @@ public class RaftLog {
         return null;
     }
 
-    public boolean isUpToDate(long lasti, long term) throws Exception {
+    public boolean isUpToDate(long lasti, long term) {
         return term > this.lastTerm() || (term == this.lastTerm() && lasti >= this.lastIndex());
     }
 
@@ -288,7 +288,7 @@ public class RaftLog {
         }
     }
 
-    public boolean matchCommit(long maxIndex, long term) throws Exception {
+    public boolean matchCommit(long maxIndex, long term) {
         if (maxIndex > this.committed) {
             Exception err = null;
             long t = 0L;

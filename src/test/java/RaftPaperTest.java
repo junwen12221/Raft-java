@@ -821,6 +821,158 @@ public class RaftPaperTest {
 
     }
 
+    private Raftpb.Entry entry(int term, int index) {
+        return Raftpb.Entry.builder().term(term).index(index).build();
+    }
+
+
+    // TestLeaderSyncFollowerLog tests that the leader could bring a follower's log
+    // into consistency with its own.
+    // Reference: section 5.3, figure 7
+    @Test
+    public void testLeaderSyncFollowerLog() throws Exception {
+        List<Raftpb.Entry> ents = Arrays.asList(
+                entry(0, 0),
+                entry(1, 1), entry(1, 2), entry(1, 3),
+                entry(4, 4), entry(4, 5),
+                entry(5, 6), entry(5, 7),
+                entry(6, 8), entry(6, 9), entry(6, 10)
+        );
+        long term = 8;
+        List<List<Raftpb.Entry>> tests = Arrays.asList(
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(4, 4),
+                        entry(4, 5),
+                        entry(5, 6),
+                        entry(5, 7),
+                        entry(6, 8),
+                        entry(6, 9)
+
+                ),
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(4, 4)
+                ),
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(4, 4),
+                        entry(4, 5),
+                        entry(5, 6),
+                        entry(5, 7),
+                        entry(6, 8),
+                        entry(6, 9),
+                        entry(6, 10),
+                        entry(6, 11)
+
+                ),
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(4, 4),
+                        entry(4, 5),
+                        entry(5, 6),
+                        entry(5, 7),
+                        entry(6, 8),
+                        entry(6, 9),
+                        entry(6, 10),
+                        entry(7, 11),
+                        entry(7, 12)
+
+                ),
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(4, 4),
+                        entry(4, 5),
+                        entry(4, 6),
+                        entry(4, 7)
+                ),
+                Arrays.asList(
+                        entry(0, 0),
+                        entry(1, 1),
+                        entry(1, 2),
+                        entry(1, 3),
+                        entry(2, 4),
+                        entry(2, 5),
+                        entry(2, 6),
+                        entry(3, 7),
+                        entry(3, 8),
+                        entry(3, 9),
+                        entry(3, 10),
+                        entry(3, 11)
+                )
+        );
+        int i = 0;
+        for (List<Raftpb.Entry> tt : tests) {
+            MemoryStorage leadStorage = MemoryStorage.newMemoryStorage();
+            leadStorage.append(ents);
+            Raft lead = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, leadStorage);
+            lead.loadState(Raftpb.HardState.builder().commit(lead.raftLog.lastIndex()).term(term).build());
+            MemoryStorage follewerStorage = MemoryStorage.newMemoryStorage();
+            follewerStorage.append(tt);
+            Raft follwer = RaftTestUtil.newTestRaft(2, Arrays.asList(1L, 2L, 3L), 10, 1, follewerStorage);
+            follwer.loadState(Raftpb.HardState.builder().term(term - 1).build());
+
+            RaftTestUtil.Network n = RaftTestUtil.newNetwork(lead, follwer, RaftTestUtil.nopStepper);
+            if (i == 2) {
+                System.out.println("----------------");
+            }
+            n.send(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgHup).build());
+
+            n.send(Raftpb.Message.builder().from(3).to(1).type(Raftpb.MessageType.MsgVoteResp).term(term + 1).build());
+
+            n.send(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp).entries(Arrays.asList(entry(0, 0))).build());
+            String s = RaftTestUtil.ltoa(lead.raftLog);
+            if (!s.equals(RaftTestUtil.ltoa(follwer.raftLog))) {
+                RaftTestUtil.errorf("#%d: log diff:\n%s", i, s);
+            }
+            ++i;
+        }
+
+    }
+
+    public void commitNoopEntry(Raft r, MemoryStorage s) throws Exception {
+        if (r.state != Raft.StateType.StateLeader) {
+            Util.panic("it should only be used when it is the leader");
+        }
+        r.bcastAppend();
+        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+
+        for (Raftpb.Message msg : msgs) {
+            if (msg.getType() != Raftpb.MessageType.MsgApp || Util.len(msg.getEntries()) != 1 || msg.getEntries().get(0).getData() != null) {
+                Util.panic("not a message to append noop entry");
+            }
+            r.step(acceptAndReply(msg));
+        }
+        RaftTestUtil.readMessages(r);
+        s.append(r.getRaftLog().unstableEntries());
+        r.raftLog.appliesTo(r.raftLog.committed);
+        r.raftLog.stableTo(r.raftLog.lastIndex(), r.raftLog.lastTerm());
+
+    }
+
+    private Raftpb.Message acceptAndReply(Raftpb.Message msg) {
+        if (msg.getType() != Raftpb.MessageType.MsgApp) {
+            Util.panic("type should be MsgApp");
+        }
+        return Raftpb.Message.builder().from(msg.to).to(msg.from).type(Raftpb.MessageType.MsgAppResp)
+                .index(msg.index + Util.len(msg.getEntries())).build();
+    }
+
     @AllArgsConstructor
     @Builder
     @Value
@@ -856,34 +1008,6 @@ public class RaftPaperTest {
         int size;
         Map<Long, Boolean> acceptors;
         boolean wack;
-    }
-
-    public void commitNoopEntry(Raft r, MemoryStorage s) throws Exception {
-        if (r.state != Raft.StateType.StateLeader) {
-            Util.panic("it should only be used when it is the leader");
-        }
-        r.bcastAppend();
-        List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
-
-        for (Raftpb.Message msg : msgs) {
-            if (msg.getType() != Raftpb.MessageType.MsgApp || Util.len(msg.getEntries()) != 1 || msg.getEntries().get(0).getData() != null) {
-                Util.panic("not a message to append noop entry");
-            }
-            r.step(acceptAndReply(msg));
-        }
-        RaftTestUtil.readMessages(r);
-        s.append(r.getRaftLog().unstableEntries());
-        r.raftLog.appliesTo(r.raftLog.committed);
-        r.raftLog.stableTo(r.raftLog.lastIndex(), r.raftLog.lastTerm());
-
-    }
-
-    private Raftpb.Message acceptAndReply(Raftpb.Message msg) {
-        if (msg.getType() != Raftpb.MessageType.MsgApp) {
-            Util.panic("type should be MsgApp");
-        }
-        return Raftpb.Message.builder().from(msg.to).to(msg.from).type(Raftpb.MessageType.MsgAppResp)
-                .index(msg.index + Util.len(msg.getEntries())).build();
     }
 
     @AllArgsConstructor

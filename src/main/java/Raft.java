@@ -1037,7 +1037,7 @@ public class Raft {
                 } else {
                     r.logger.infof("%x [logterm: %d, index: %d, vote: %x] rejected %s from %x [logterm: %d, index: %d] at term %d",
                             r.id, r.raftLog.lastTerm(), r.raftLog.lastIndex(), r.vote, m.type, m.from, m.logTerm, m.index, r.term);
-                    this.send(Raftpb.Message.builder().to(m.getFrom()).term(this.term).type(m.type).reject(true).build());
+                    this.send(Raftpb.Message.builder().to(m.getFrom()).term(this.term).type(Util.voteRespMsgType(m.type)).reject(true).build());
                 }
                 break;
             default:
@@ -1660,9 +1660,8 @@ public class Raft {
     /**
      *
      * @param m
-     * @throws Exception
      */
-    public void handleSnapshot(Raftpb.Message m) throws Exception {
+    public void handleSnapshot(Raftpb.Message m) {
         Raft r = this;
         long sindex = m.getSnapshot().getMetadata().getIndex();
         long sterm = m.getSnapshot().getMetadata().getTerm();

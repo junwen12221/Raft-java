@@ -27,6 +27,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,9 +66,11 @@ public interface RaftLogger {
     int calldepth = Integer.MAX_VALUE;
     DefaultLogger raftLogger = new DefaultLogger();
 
+    @EqualsAndHashCode
+    @ToString
     class DefaultLogger implements RaftLogger{
-       boolean debug = false;
-       final Logger logger = LoggerFactory.getLogger(DefaultLogger.class);
+        boolean debug = false;
+        final Logger logger = LoggerFactory.getLogger(DefaultLogger.class);
 //        public static void main(String[] args) {
 //            Logger logger = LoggerFactory.getLogger(DefaultLogger.class);
 //        }
@@ -74,9 +78,11 @@ public interface RaftLogger {
         public void enableDebug(){
             this.debug = true;
         }
+
         public void disableDebug(){
             this.debug = false;
         }
+
         @Override
         public void debug(Object... v) {
             if (debug){
@@ -94,7 +100,7 @@ public interface RaftLogger {
         @Override
         public void error(Object... v) {
 
-                output(calldepth,header("ERROR",Arrays.deepToString(v)));
+            output(calldepth,header("ERROR",Arrays.deepToString(v)));
 
         }
 
@@ -145,9 +151,11 @@ public interface RaftLogger {
         public void panicf(String format, Object... v) {
             Util.panic(format,v);
         }
+
         public String header(String lvl,String msg){
             return String.format("%s: %s",lvl,msg);
         }
+
         public void output(int calldepth,String message){
 //            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
             logger.debug("{} {}", "", message);

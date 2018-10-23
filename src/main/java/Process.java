@@ -29,6 +29,7 @@
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NonNull;
 
 /***
  * cjw
@@ -37,7 +38,8 @@ import lombok.Data;
 @Builder
 public class Process {
     long match, next;
-    private ProgressStateType state = ProgressStateType.ProgressStateProbe;
+    @NonNull
+    private ProgressStateType state;
 
     boolean paused;
     boolean recentActive;
@@ -51,7 +53,7 @@ public class Process {
 
 
     enum ProgressStateType {
-        ProgressStateProbe, ProgressStateReplicate, ProgressStateSnapshot;
+        ProgressStateProbe, ProgressStateReplicate, ProgressStateSnapshot
     }
 
     public void resetState(ProgressStateType state) {

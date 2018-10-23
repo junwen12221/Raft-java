@@ -27,7 +27,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import java.io.IOException;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
@@ -35,6 +37,8 @@ import java.util.concurrent.locks.ReentrantLock;
 /***
  * cjw
  */
+@EqualsAndHashCode
+@ToString
 public class MemoryStorage implements Storage {
 
     final ReentrantLock lock = new ReentrantLock();
@@ -53,11 +57,11 @@ public class MemoryStorage implements Storage {
         return new MemoryStorage(array);
     }
 
-    public Raftpb.HardState initialHardState() throws Exception {
+    public Raftpb.HardState initialHardState() {
         return this.hardState;
     }
 
-    public Raftpb.ConfState initialConfState() throws Exception {
+    public Raftpb.ConfState initialConfState() {
         return this.snapshot.getMetadata().getConfState();
     }
 
@@ -95,7 +99,7 @@ public class MemoryStorage implements Storage {
     }
 
     @Override
-    public State initialSate() throws Exception {
+    public State initialSate() {
         return State.builder().confState(this.confState).hardState(this.hardState).build();
     }
 
@@ -159,7 +163,7 @@ public class MemoryStorage implements Storage {
         });
     }
     @Override
-    public void close() throws IOException {
+    public void close() {
 
     }
 

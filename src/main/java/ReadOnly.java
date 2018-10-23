@@ -29,8 +29,12 @@
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /***
  * cjw
@@ -99,6 +103,7 @@ public class ReadOnly {
    }
    @Data
    @Builder
+   @EqualsAndHashCode
     public   static class ReadState{
         long index;
         byte[] requestCtx;

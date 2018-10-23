@@ -29,6 +29,8 @@
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.SneakyThrows;
 import org.junit.Assert;
 
 import java.util.*;
@@ -58,10 +60,8 @@ public class RaftTestUtil {
                 .build();
     }
 
-    interface StateMachine {
-        void step(Raftpb.Message m) throws Exception;
-
-        List<Raftpb.Entry> readMessage();
+    public static Network newNetwork(Object... peers) throws Exception {
+        return Network.newNetworkWithConfig(null, peers);
     }
 
     public static List<Long> idsBySize(int size) {
@@ -78,16 +78,8 @@ public class RaftTestUtil {
         return msgs;
     }
 
-    public static class BlackHole implements StateMachine {
-        @Override
-        public void step(Raftpb.Message m) {
-
-        }
-
-        @Override
-        public List<Raftpb.Entry> readMessage() {
-            return null;
-        }
+    public static Network newNetworkWithConfig(Consumer<Config> configFunc, Object... peers) throws Exception {
+        return Network.newNetworkWithConfig(configFunc, peers);
     }
 
     public final static BlackHole nopStepper = new BlackHole();
@@ -122,6 +114,33 @@ public class RaftTestUtil {
         return sm;
     }
 
+    public static RaftStateMachineImpl stateMachine(Raft r) {
+        return new RaftStateMachineImpl(r);
+    }
+
+    public static String ltoa(RaftLog raftLog) {
+        String format = String.format("commit:%d,applied:%d,allEntries:%s", raftLog.committed, raftLog.applied, raftLog.allEntries());
+        return format;
+    }
+
+    interface StateMachine {
+        void step(Raftpb.Message m) throws Exception;
+
+        List<Raftpb.Message> readMessage();
+    }
+
+    public static class BlackHole implements StateMachine {
+        @Override
+        public void step(Raftpb.Message m) {
+
+        }
+
+        @Override
+        public List<Raftpb.Message> readMessage() {
+            return Collections.EMPTY_LIST;
+        }
+    }
+
     @Data
     @Builder
     public static class Network {
@@ -131,11 +150,11 @@ public class RaftTestUtil {
         Map<Raftpb.MessageType, Boolean> ignorem;
         Function<Raftpb.Message, Boolean> msgHook;
 
-        public Network newNetwork(StateMachine... peers) throws Exception {
+        public static Network newNetwork(Object... peers) throws Exception {
             return newNetworkWithConfig(null, peers);
         }
 
-        public Network newNetworkWithConfig(Consumer<Config> configFunc, Object... peers) throws Exception {
+        public static Network newNetworkWithConfig(Consumer<Config> configFunc, Object... peers) throws Exception {
             int size = peers.length;
             List<Long> peerAddrs = idsBySize(size);
 
@@ -164,17 +183,17 @@ public class RaftTestUtil {
                     v.leaderPrs = new HashMap<>();
 
                     for (int i = 0; i < size; i++) {
-                        Boolean ok = leaders.get(peerAddrs.get(i));
+                        Boolean ok = leaders.getOrDefault(peerAddrs.get(i), false);
                         if (ok) {
                             v.getLeaderPrs().put(peerAddrs.get(i), Process.builder().isLeader(true).build());
                         } else {
-                            v.prs.put(peerAddrs.get(i), Process.builder().build());
+                            v.prs.put(peerAddrs.get(i), Process.builder().state(Process.ProgressStateType.ProgressStateProbe).build());
                         }
                     }
                     v.reset(v.getTerm());
                     npeers.put(id, v);
                 } else {
-                    Util.panic("unexpected state machine type: %T", p);
+                    Util.panic("unexpected state machine type: %s", p.getClass().toString());
                 }
 
             }
@@ -190,13 +209,23 @@ public class RaftTestUtil {
             c.setPreVote(true);
         }
 
-        public void send(Raftpb.Message... msgs) {
-            List<Raftpb.Message> messages = Arrays.asList(msgs);
+        public void send(Raftpb.Message... msgs) throws Exception {
+            List<Raftpb.Message> messages = new ArrayList<>(Arrays.asList(msgs));
             while (!messages.isEmpty()) {
-                List<Raftpb.Message> newMsgs = new ArrayList<>();
-
+                Raftpb.Message m = messages.remove(0);
+                Object p = this.peers.get(m.getTo());
+                if (p instanceof Raft) {
+                    Raft p1 = (Raft) p;
+                    p1.step(m);
+                    messages.addAll(this.filter(RaftTestUtil.readMessages(p1)));
+                } else if (p instanceof BlackHole) {
+                    BlackHole p1 = (BlackHole) p;
+                    p1.step(m);
+                    messages.addAll(this.filter(p1.readMessage()));
+                }
             }
         }
+
 
         public void drop(long from, long to, double perc) {
             this.dropm.put(Connem.builder().from(from).to(to).build(), perc);
@@ -226,7 +255,7 @@ public class RaftTestUtil {
             this.ignorem = new HashMap<>();
         }
 
-        public List<Raftpb.Message> filter(Raftpb.Message... msgs) {
+        public List<Raftpb.Message> filter(List<Raftpb.Message> msgs) {
             List<Raftpb.Message> mm = new ArrayList<>();
             for (Raftpb.Message m : msgs) {
                 if (this.ignorem.containsKey(m.getType())) {
@@ -238,7 +267,7 @@ public class RaftTestUtil {
                         break;
                     }
                     default: {
-                        Double perc = this.dropm.get(Connem.builder().from(m.getFrom()).to(m.getTo()).build());
+                        Double perc = this.dropm.getOrDefault(Connem.builder().from(m.getFrom()).to(m.getTo()).build(), 0.0);
                         float n = ThreadLocalRandom.current().nextFloat();
                         if (n < perc) {
                             continue;
@@ -258,6 +287,7 @@ public class RaftTestUtil {
 
     @Data
     @Builder
+    @EqualsAndHashCode
     public static class Connem {
         long from, to;
 
@@ -280,19 +310,6 @@ public class RaftTestUtil {
         }
     }
 
-    class StateMachineImpl implements StateMachine {
-        @Override
-        public void step(Raftpb.Message m) {
-
-        }
-
-        @Override
-        public List<Raftpb.Entry> readMessage() {
-
-            return null;
-        }
-    }
-
     public static void setRandomizedElectionTimeout(Raft r, int v) {
         r.setRandomizedElectionTimeout(v);
     }
@@ -306,5 +323,24 @@ public class RaftTestUtil {
         Config config = newTestConfig(id, peers, election, heartbeat, storage);
         config.setLeaders(learner);
         return Raft.newRaft(config);
+    }
+
+    public static class RaftStateMachineImpl implements StateMachine {
+        Raft r;
+
+        public RaftStateMachineImpl(Raft r) {
+            this.r = r;
+        }
+
+        @Override
+        @SneakyThrows
+        public void step(Raftpb.Message m) {
+            r.step(m);
+        }
+
+        @Override
+        public List<Raftpb.Message> readMessage() {
+            return RaftTestUtil.readMessages(r);
+        }
     }
 }
