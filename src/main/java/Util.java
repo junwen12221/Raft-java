@@ -241,7 +241,7 @@ public class Util {
      * @param formatter
      * @return
      */
-    public static String DescribeMessage(Raftpb.Message m, EntryFormatter formatter) {
+    public static String describeMessage(Raftpb.Message m, EntryFormatter formatter) {
         StringBuilder buffer = new StringBuilder();
         buffer.append(String.format("%x->%x %s Term:%d Log:%d/%d", m.getFrom(),
                 m.getTo(), m.getType().toString(),m.getTerm()

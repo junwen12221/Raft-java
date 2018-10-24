@@ -926,12 +926,14 @@ public class RaftPaperTest {
             follewerStorage.append(tt);
             Raft follwer = RaftTestUtil.newTestRaft(2, Arrays.asList(1L, 2L, 3L), 10, 1, follewerStorage);
             follwer.loadState(Raftpb.HardState.builder().term(term - 1).build());
-
+            // It is necessary to have a three-node cluster.
+            // The second may have more up-to-date log than the first one, so the
+            // first node needs the vote from the third node to become the leader.
             RaftTestUtil.Network n = RaftTestUtil.newNetwork(lead, follwer, RaftTestUtil.nopStepper);
-            if (i == 2) {
-                System.out.println("----------------");
-            }
+
             n.send(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgHup).build());
+            // The election occurs in the term after the one we loaded with
+            // lead.loadState above.
 
             n.send(Raftpb.Message.builder().from(3).to(1).type(Raftpb.MessageType.MsgVoteResp).term(term + 1).build());
 
@@ -971,6 +973,70 @@ public class RaftPaperTest {
         }
         return Raftpb.Message.builder().from(msg.to).to(msg.from).type(Raftpb.MessageType.MsgAppResp)
                 .index(msg.index + Util.len(msg.getEntries())).build();
+    }
+
+    VoteRequestCase VRcase(List<Raftpb.Entry> ents,
+                           long wterm) {
+        return new VoteRequestCase(ents, wterm);
+    }
+
+    // TestVoteRequest tests that the vote request includes information about the candidate’s log
+    // and are sent to all of the other nodes.
+    // Reference: section 5.4.1
+    @Test
+    public void testVoteRequest() throws Exception {
+        List<VoteRequestCase> tests = Arrays.asList(
+                VRcase(Arrays.asList(entry(1, 1)), 2),
+                VRcase(Arrays.asList(entry(1, 1), entry(2, 2)), 3)
+        );
+
+        int j = 0;
+        for (VoteRequestCase tt : tests) {
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L, 3L), 10, 1, MemoryStorage.newMemoryStorage());
+            r.step(Raftpb.Message.builder().from(2).to(1).type(Raftpb.MessageType.MsgApp).term(tt.wterm - 1).logTerm(0).index(0).entries(tt.ents).build());
+            RaftTestUtil.readMessages(r);
+            for (int i = 1; i < r.electionTimeout * 2; i++) {
+                r.tickElection();
+            }
+            List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+            Collections.sort(msgs, Comparator.comparing((i) -> i.toString()));
+            if (Util.len(msgs) != 2) {
+                Assert.fail(String.format("#%d: len(msg) = %d, want %d", j, Util.len(msgs), 2));
+            }
+            long i = 0;
+            for (Raftpb.Message msg : msgs) {
+                if (msg.getType() != Raftpb.MessageType.MsgVote) {
+                    RaftTestUtil.errorf("#%d: msgType = %d, want %d", i, msg.getType(), Raftpb.MessageType.MsgVote);
+                }
+                if (msg.getTo() != i + 2) {
+                    RaftTestUtil.errorf("#%d: to = %d, want %d", i, msg.getTo(), i + 2);
+                }
+                if (msg.getTerm() != tt.wterm) {
+                    RaftTestUtil.errorf("#%d: term = %d, want %d", i, msg.getTerm(), tt.wterm);
+                }
+
+                long windex = tt.ents.get(Util.len(tt.ents) - 1).getIndex();
+                long wlogterm = tt.ents.get(Util.len(tt.ents) - 1).getTerm();
+                if (msg.getIndex() != windex) {
+                    RaftTestUtil.errorf("#%d: index = %d, want %d", i, msg.getIndex(), windex);
+                }
+                if (msg.getLogTerm() != wlogterm) {
+                    RaftTestUtil.errorf("#%d: logterm = %d, want %d", i, msg.getLogTerm(), wlogterm);
+                }
+                ++i;
+            }
+            ++j;
+        }
+
+
+    }
+
+    @AllArgsConstructor
+    @Builder
+    @Value
+    static class VoteRequestCase {
+        List<Raftpb.Entry> ents;
+        long wterm;
     }
 
     @AllArgsConstructor
