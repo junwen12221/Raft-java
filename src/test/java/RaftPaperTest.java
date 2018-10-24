@@ -1027,8 +1027,125 @@ public class RaftPaperTest {
             }
             ++j;
         }
+    }
+
+    VoterCase Case(
+            List<Raftpb.Entry> ents,
+            long logTerm,
+            long index,
+
+            boolean wreject
+
+    ) {
+        return new VoterCase(ents, logTerm, index, wreject);
+    }
+
+    // TestVoter tests the voter denies its vote if its own log is more up-to-date
+    // than that of the candidate.
+    // Reference: section 5.4.1
+    @Test
+    public void testVoter() throws Exception {
+        List<VoterCase> tests = Arrays.asList(
+                // same logterm
+                Case(Arrays.asList(entry(1, 1)), 1, 1, false),
+                Case(Arrays.asList(entry(1, 1)), 1, 2, false),
+                Case(Arrays.asList(entry(1, 1), entry(1, 2)), 1, 1, true),
+                // candidate higher logterm
+                Case(Arrays.asList(entry(1, 1)), 2, 1, false),
+                Case(Arrays.asList(entry(1, 1)), 2, 2, false),
+                Case(Arrays.asList(entry(1, 1), entry(1, 2)), 2, 1, false),
+                // voter higher logterm
+                Case(Arrays.asList(entry(2, 1)), 1, 1, true),
+                Case(Arrays.asList(entry(2, 1)), 1, 2, true),
+                Case(Arrays.asList(entry(2, 1), entry(1, 2)), 1, 1, true)
+        );
+        int i = 0;
+        for (VoterCase tt : tests) {
+            MemoryStorage storage = MemoryStorage.newMemoryStorage();
+            storage.append(tt.ents);
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L), 10, 1, storage);
+            r.step(Raftpb.Message.builder().from(2).to(1).type(Raftpb.MessageType.MsgVote).term(3).logTerm(tt.logTerm).index(tt.index).build());
+
+            List<Raftpb.Message> msgs = RaftTestUtil.readMessages(r);
+
+            if (Util.len(msgs) != 1) {
+                Assert.fail(String.format("#%d: len(msg) = %d, want %d", i, Util.len(msgs), 1));
+            }
+            Raftpb.Message m = msgs.get(0);
+            if (m.getType() != Raftpb.MessageType.MsgVoteResp) {
+                RaftTestUtil.errorf("#%d: reject = %t, want %t", i, m.isReject(), tt.wreject);
+            }
+
+            if (m.isReject() != tt.wreject) {
+                RaftTestUtil.errorf("#%d: reject = %t, want %t", i, m.isReject(), tt.wreject);
+            }
+            ++i;
+        }
+
+    }
+
+    LeaderOnlyCommitsLogFromCurrentTerm Case(
+            long index,
+            long wcommit
+    ) {
+        return new LeaderOnlyCommitsLogFromCurrentTerm(index, wcommit);
+    }
+
+    // TestLeaderOnlyCommitsLogFromCurrentTerm tests that only log entries from the leader’s
+    // current term are committed by counting replicas.
+    // Reference: section 5.4.2
+    @Test
+    public void testLeaderOnlyCommitsLogFromCurrentTerm() throws Exception {
+        List<Raftpb.Entry> ents = Arrays.asList(entry(1, 1), entry(2, 2));
+        List<LeaderOnlyCommitsLogFromCurrentTerm> tests = Arrays.asList(
+                // do not commit log entries in previous terms
+                Case(1, 0),
+                Case(2, 0),
+                // commit log in current term
+                Case(3, 3)
+        );
+
+        int i = 0;
+        for (LeaderOnlyCommitsLogFromCurrentTerm tt : tests) {
+            MemoryStorage storage = MemoryStorage.newMemoryStorage();
+            storage.append(ents);
+            Raft r = RaftTestUtil.newTestRaft(1, Arrays.asList(1L, 2L), 10, 1, storage);
+            r.loadState(Raftpb.HardState.builder().term(2).build());
+            // become leader at term 3
+            r.becomeCandidate();
+            r.becomeLeader();
+            RaftTestUtil.readMessages(r);
+            // propose a entry to current term
+            r.step(Raftpb.Message.builder().from(1).to(1).type(Raftpb.MessageType.MsgProp)
+                    .entries(Arrays.asList(entry(0, 0))).build());
+
+            r.step(Raftpb.Message.builder().from(2).to(1).type(Raftpb.MessageType.MsgAppResp).term(r.term).index(tt.getIndex()).build());
+
+            if (r.raftLog.committed != tt.wcommit) {
+                RaftTestUtil.errorf("#%d: commit = %d, want %d", i, r.raftLog.committed, tt.wcommit);
+            }
+            ++i;
+        }
 
 
+    }
+
+    @Builder
+    @Value
+    @AllArgsConstructor
+    static class VoterCase {
+        List<Raftpb.Entry> ents;
+        long logTerm;
+        long index;
+        boolean wreject;
+    }
+
+    @AllArgsConstructor
+    @Builder
+    @Value
+    static class LeaderOnlyCommitsLogFromCurrentTerm {
+        long index;
+        long wcommit;
     }
 
     @AllArgsConstructor
