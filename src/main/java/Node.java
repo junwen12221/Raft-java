@@ -32,33 +32,62 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /***
  * cjw
  */
-public class Node {
+public interface Node {
+
+    Raftpb.HardState emptyState = Raftpb.HardState.builder().build();
+
+
     enum SnapshotStatus {
         SnapshotFinish, SnapshotFailure
     }
 
+    Exception ErrStopped = new Exception("raft: stopped");
+
+    static boolean isHardStateEqual(Raftpb.HardState a, Raftpb.HardState b) {
+        return a.term == b.term && a.vote == b.vote && a.commit == b.commit;
+    }
+
+    static boolean isEmptyHardState(Raftpb.HardState b) {
+        return isHardStateEqual(b, emptyState);
+    }
+
+    static boolean isEmptySnap(Raftpb.Snapshot sp) {
+        return sp.metadata.index == 0;
+    }
+
+    void tick();
+
     @Builder
-    public static class Ready {
+    class Ready {
         SoftState softState;
         Raftpb.HardState hardState;
-        ReadOnly.ReadState[] readStates;
-        Raftpb.Entry[] entries;
+        List<ReadOnly.ReadState> readStates;
+        List<Raftpb.Entry> entries;
         Raftpb.Snapshot snapshot;
-        Raftpb.Entry[] committedEntries;
-        Raftpb.Message[] messages;
+        List<Raftpb.Entry> committedEntries;
+        List<Raftpb.Message> messages;
         boolean mustSync;
+
+        public boolean containsUpdate() {
+            return this.softState != null || !isEmptyHardState(this.hardState) ||
+                    !isEmptySnap(this.snapshot) || Util.len(this.entries) > 0 ||
+                    Util.len(this.committedEntries) > 0 || Util.len(this.messages) > 0 || Util.len(this.readStates) != 0;
+        }
     }
 
     @Data
     @AllArgsConstructor
     @Builder
     @EqualsAndHashCode
-    public static class SoftState {
+    class SoftState {
         long leader;
         long raftState;
     }
-    static final Raftpb.HardState emptyState = Raftpb.HardState.builder().build();
+
+
 }
